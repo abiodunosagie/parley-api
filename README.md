@@ -1,132 +1,115 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="brand/banner-dark.svg">
+  <img src="brand/banner.svg" alt="parley-api: Parley's backend as a NestJS service" width="100%">
+</picture>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+[![CI](https://github.com/abiodunosagie/parley-api/actions/workflows/ci.yml/badge.svg)](https://github.com/abiodunosagie/parley-api/actions/workflows/ci.yml)
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+The backend of [Parley](https://github.com/abiodunosagie/parley), the open-source Flutter app
+with Claude inside, rebuilt as a NestJS service. It keeps the contract of Parley's Supabase edge
+function (`POST /v1/claude`, same body, same events, same error words), so the app switches by
+changing one base URL. Live at `https://parley-api.vercel.app`.
 
-## Description
+## What it does
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ npm install
+```
+Flutter app ──POST /v1/claude──▶ parley-api (NestJS on Vercel) ──▶ Anthropic API
+                                   1. BodySizeGuard      declared size, before the body is read
+                                   2. SupabaseAuthGuard  the Supabase access token, checked server-side
+                                   3. read + validate    streamed byte limit, every block rebuilt from an allowlist
+                                   4. claim a slot       one locked SQL call: per-user, per-network, project limits
+                                   5. call Claude        stream SSE or return JSON, stop billing if the app leaves
+                                   6. log what it spent  even on errors and disconnects
+                                         │
+                                         ▼
+                                   Supabase Postgres (the same claude_requests table as the edge function)
 ```
 
-## Compile and run the project
+- **Seven modes on one endpoint.** Chat, photos and PDFs with citations, rewriting stream back as
+  server-sent events; job-post extraction, receipts (structured output) and the tool-using agent
+  return one JSON answer.
+- **The server trusts nothing.** The app is open source, so every field is untrusted: allowed models
+  and block types per mode, base64 checked against the file's real signature, system prompts and
+  tool definitions only on the server.
+- **Limits that hold under a burst.** Every limit is checked and the request recorded inside one
+  Postgres function that takes a lock, so parallel requests cannot all see the same count. Both
+  backends write the same table, so switching between them does not reset anyone's budget.
+- **Spend is counted honestly.** A request the app abandons mid-stream is aborted upstream and still
+  logged with what streamed so far.
+- **Bring your own key.** A user's own Anthropic key rides in the body for one request, is never
+  stored or logged, and is blanked out of any error message before it is written to the logs.
+- **No internals leak.** Every error leaves as `{ "error": "..." }` with words written for the app;
+  stack traces and upstream messages stay in the server logs.
+
+## Run it
+
+You need Node.js 24 and the Supabase project from the [Parley repo](https://github.com/abiodunosagie/parley)
+(its migrations create `claude_requests` and `claim_claude_request`).
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+git clone https://github.com/abiodunosagie/parley-api.git && cd parley-api
+npm ci
+cp .env.example .env        # fill in your Supabase URL, service role key and Anthropic key
+set -a && . ./.env && set +a
+npm run start:dev           # http://localhost:3000/health
 ```
 
-## Run tests
+Then point the app at it: set `PARLEY_API_URL` in Parley's `config/parley.json`.
+
+## Deploy (free)
+
+It runs on Vercel's Hobby plan with no changes: NestJS is detected from `vercel.json`, the app
+becomes one function, and streams can run for up to 5 minutes.
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+vercel link
+vercel env add SUPABASE_URL production
+vercel env add SUPABASE_SERVICE_ROLE_KEY production --sensitive
+vercel env add ANTHROPIC_API_KEY production --sensitive
+vercel env add MAX_BODY_BYTES production        # 4400000: Vercel refuses bodies over 4.5 MB
+vercel deploy --prod
 ```
 
-## Deployment
+Vercel caps a request body at 4.5 MB, so PDFs over about 3 MB and several large photos in one
+message are refused there. On a host without that cap (Render, a container, a VM) leave
+`MAX_BODY_BYTES` unset and the full 16 MB limit applies.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+| Variable | Required | What it is |
+| --- | --- | --- |
+| `SUPABASE_URL` | yes | `https://<ref>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | yes | server-only key for auth checks and the limits table |
+| `ANTHROPIC_API_KEY` | no | the project's key; without it only own-key requests are served |
+| `MAX_BODY_BYTES` | no | largest body accepted, default 16000000 |
+| `TRUSTED_IP_HEADER` | no | header the host sets with the caller's IP, default `x-vercel-forwarded-for` |
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Tests
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run lint && npx tsc --noEmit
+npm test            # 30 unit tests: request, replay and own-key validation
+npm run test:e2e    # 14 end-to-end tests through the real Nest app: auth, size, limits, SSE, aborts
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Layout
 
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-To add it to this project, run this and approve the code it prints at [observe.nestjs.com/link](https://observe.nestjs.com/link) - signing up for free if you have no account:
-
-```bash
-$ npx @nestjs/observe link
 ```
-
-It installs `@nestjs/observe`, wires it into `AppModule` and `main.ts`, and writes the app key and secret into `.env`, which every `nest start` script (`start`, `start:dev`, `start:debug`) then loads. In production, set `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` in the environment instead.
-
-Or do it by hand:
-
-```bash
-$ npm install @nestjs/observe
+src/
+  main.ts                    boot, CORS, body parser off
+  app.module.ts              env, error filter, modules
+  config/env.ts              environment, checked once at boot
+  common/error.filter.ts     every error as { error }
+  health/                    GET /health
+  claude/
+    claude.controller.ts     POST /v1/claude, SSE or JSON
+    claude.service.ts        own key, validation, limits, document cap
+    request-guards.ts        size and sign-in checks
+    supabase.service.ts      auth lookup, claim_claude_request, usage log
+    anthropic.ts             the only file that calls the Anthropic API
+    validate*.ts             the allowlist every request passes
+    config.ts                models, modes, limits
+    prompts.ts, schemas.ts   system prompts, structured-output schemas, agent tools
 ```
-
-Then follow the [setup guide](https://docs.nestjs.com/observability/sdk) - it takes a single import and an app key.
-
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+MIT. Parley's brand (the mark and its colours) belongs to the Parley project; see `brand/`.

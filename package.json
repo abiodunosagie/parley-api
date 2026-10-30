@@ -1,10 +1,10 @@
 {
   "name": "parley-api",
   "version": "0.0.1",
-  "description": "",
-  "author": "",
+  "description": "Parley's backend as a NestJS service: Supabase auth, atomic rate limits, SSE streaming, Claude API.",
+  "author": "Abiodun Osagie",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "nest build",
@@ -48,5 +48,9 @@
   },
   "engines": {
     "node": "24.x"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abiodunosagie/parley-api.git"
   }
 }
