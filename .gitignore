@@ -1,0 +1,17 @@
+# dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# secrets: never commit; production values live in Vercel env, local ones come from direnv
+.env
+.env.*
+!.env.example
+.vercel/
+
+# local working files
+docs/task-tracker.tsv
+SESSION_GUIDE.md
+.DS_Store
+docs/.task-tracker.tsv.lock
