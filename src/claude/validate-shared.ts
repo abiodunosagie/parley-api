@@ -14,10 +14,10 @@ export type Budget = {
 };
 
 export const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
+  typeof v === 'object' && v !== null && !Array.isArray(v);
 
 export function text(value: unknown, budget: { textChars: number }): string {
-  if (typeof value !== "string") throw new Invalid("Text blocks need text.");
+  if (typeof value !== 'string') throw new Invalid('Text blocks need text.');
   budget.textChars += value.length;
   return value;
 }

@@ -3,16 +3,29 @@
 
 // serverFallback: Opus and Sonnet support server-side refusal fallbacks; Haiku does not.
 export const MODELS = {
-  "claude-haiku-5-5": { serverFallback: false },
-  "claude-sonnet-5-5": { serverFallback: true },
-  "claude-opus-5-5": { serverFallback: true },
+  'claude-haiku-5-5': { serverFallback: false },
+  'claude-sonnet-5-5': { serverFallback: true },
+  'claude-opus-5-5': { serverFallback: true },
 } as const;
 
 export type ModelId = keyof typeof MODELS;
 
 // Streaming modes send text as it is written; the others return one finished JSON answer.
-export const MODES = ["chat", "vision", "document", "rewrite", "extract", "receipt", "agent"] as const;
-export const STREAMING_MODES = ["chat", "vision", "document", "rewrite"] as const;
+export const MODES = [
+  'chat',
+  'vision',
+  'document',
+  'rewrite',
+  'extract',
+  'receipt',
+  'agent',
+] as const;
+export const STREAMING_MODES = [
+  'chat',
+  'vision',
+  'document',
+  'rewrite',
+] as const;
 export type Mode = (typeof MODES)[number];
 
 // Output ceilings per mode. Thinking tokens count toward these, so they are generous for the task
@@ -29,19 +42,24 @@ export const MAX_TOKENS: Record<Mode, number> = {
 
 // Effort trades depth for speed and spend. Chat, rewriting and extraction are routine; photos,
 // receipts, documents and tool planning get one level more.
-export const EFFORT: Record<Mode, "low" | "medium"> = {
-  chat: "low",
-  vision: "medium",
-  document: "medium",
-  rewrite: "low",
-  extract: "low",
-  receipt: "medium",
-  agent: "medium",
+export const EFFORT: Record<Mode, 'low' | 'medium'> = {
+  chat: 'low',
+  vision: 'medium',
+  document: 'medium',
+  rewrite: 'low',
+  extract: 'low',
+  receipt: 'medium',
+  agent: 'medium',
 };
 
 // Modes whose replies show Claude's summarized reasoning in the app. Rewriting and the two
 // structured modes only show the result.
-export const SHOW_THINKING: readonly Mode[] = ["chat", "vision", "document", "agent"];
+export const SHOW_THINKING: readonly Mode[] = [
+  'chat',
+  'vision',
+  'document',
+  'agent',
+];
 
 // Web search is a server tool: Anthropic runs the searches inside the same request. Each search
 // is billed ($10 per 1,000), so one reply may search at most this many times, resumed rounds
@@ -94,4 +112,4 @@ export const LIMITS = {
 // Checked against the shape of a real key before it is used, so nothing else can ride in on it.
 export const OWN_KEY_PATTERN = /^sk-ant-[A-Za-z0-9_-]{20,250}$/;
 
-export const SERVER_FALLBACK_BETA = "server-side-fallback-2026-07-01";
+export const SERVER_FALLBACK_BETA = 'server-side-fallback-2026-07-01';
