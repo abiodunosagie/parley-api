@@ -1,6 +1,6 @@
 // The only file that talks to the Anthropic API. Chat, photos, documents and rewriting stream back
 // as they are written; extraction, receipts and the agent return one finished response.
-import Anthropic from '@anthropic-ai/sdk';
+import { Anthropic } from '@anthropic-ai/sdk';
 import {
   EFFORT,
   MAX_TOKENS,

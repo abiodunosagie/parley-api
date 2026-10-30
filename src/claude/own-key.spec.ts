@@ -1,5 +1,5 @@
 // The user's own key: which header values are accepted, and the words a rejected key turns into.
-import Anthropic from '@anthropic-ai/sdk';
+import { Anthropic } from '@anthropic-ai/sdk';
 import { publicError } from './anthropic.js';
 import { OWN_KEY_PATTERN } from './config.js';
 

@@ -1,7 +1,7 @@
 // End-to-end checks of POST /v1/claude through the real Nest app: guards, body reading, validation,
 // the rate-limit RPC, streaming, usage logging and error wording. Supabase and Anthropic are the
 // only fakes, so everything this repo owns runs for real.
-import Anthropic from '@anthropic-ai/sdk';
+import { Anthropic } from '@anthropic-ai/sdk';
 import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { createHash } from 'node:crypto';

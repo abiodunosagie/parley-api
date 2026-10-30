@@ -2,7 +2,6 @@
 // user's own key, a server key to fall back on, a valid body, the rate limits, the search budget,
 // then the document cap. Nothing here writes to the HTTP response; the controller does that.
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
-import type Anthropic from '@anthropic-ai/sdk';
 import type { IncomingHttpHeaders } from 'node:http';
 import { ENV, type Env } from '../config/env.js';
 import {
@@ -25,7 +24,7 @@ export type Admitted = {
   // The user's own key for this one request, or null on the project's key. Never stored or logged.
   ownKey: string | null;
   logId: number;
-  anthropic: Anthropic;
+  anthropic: ReturnType<typeof clientFor>;
 };
 
 @Injectable()

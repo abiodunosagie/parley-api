@@ -12,7 +12,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
+import { Anthropic } from '@anthropic-ai/sdk';
 import type { Response } from 'express';
 import { ENV, type Env } from '../config/env.js';
 import { Meter, publicError, streamReply } from './anthropic.js';

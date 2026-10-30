@@ -2,7 +2,7 @@
 // carry on: web search results (their page content is encrypted by Anthropic) and the sources
 // Claude cited. Every field is rebuilt from an allowlist. Pure functions, covered by
 // validate.spec.ts.
-import type Anthropic from '@anthropic-ai/sdk';
+import type { Anthropic } from '@anthropic-ai/sdk';
 import { type Budget, Invalid, isObject } from './validate-shared.js';
 
 type Block = Anthropic.Beta.BetaContentBlockParam;

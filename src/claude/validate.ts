@@ -2,7 +2,7 @@
 // server treats every field as untrusted: allowed models only, allowed block types per mode, hard
 // size caps, and every block rebuilt from known fields so nothing extra rides along to the API.
 // Pure functions, covered by validate.spec.ts.
-import type Anthropic from '@anthropic-ai/sdk';
+import type { Anthropic } from '@anthropic-ai/sdk';
 import { LIMITS, MODELS, MODES, type Mode, type ModelId } from './config.js';
 import { AGENT_TOOLS } from './schemas.js';
 import { parseCitation, parseSearchResult } from './validate-replay.js';

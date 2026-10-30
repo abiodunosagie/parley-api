@@ -1,7 +1,7 @@
 // JSON schemas the function hands to Claude: the job post shape for structured output and the
 // task tools for the agent. The app runs the tools on the device; the server only declares them,
 // so a client cannot add a tool Claude would then call.
-import type Anthropic from '@anthropic-ai/sdk';
+import type { Anthropic } from '@anthropic-ai/sdk';
 
 export const JOB_POST_SCHEMA = {
   type: 'object',
