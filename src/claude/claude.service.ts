@@ -1,11 +1,12 @@
-// The steps between a signed-in request and the Claude call, in the edge function's order: the
-// user's own key, a server key to fall back on, a valid body, the rate limits, the search budget,
-// then the document cap. Nothing here writes to the HTTP response; the controller does that.
+// The steps between a signed-in request and the Claude call: a server key to fall back on, a valid
+// body, the search budget, the rate limits, then the document cap. Nothing here writes to the HTTP
+// response; the controller does that.
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import type { IncomingHttpHeaders } from 'node:http';
 import { ENV, type Env } from '../config/env.js';
 import {
   agentTurn,
+  type AnthropicClient,
   clientFor,
   countInputTokens,
   type Meter,
@@ -24,7 +25,7 @@ export type Admitted = {
   // The user's own key for this one request, or null on the project's key. Never stored or logged.
   ownKey: string | null;
   logId: number;
-  anthropic: ReturnType<typeof clientFor>;
+  anthropic: AnthropicClient;
 };
 
 @Injectable()
@@ -34,25 +35,23 @@ export class ClaudeService {
     private readonly supabase: SupabaseService,
   ) {}
 
-  /**
-   * Runs every check before Claude is called and claims a slot. [onOwnKey] hears the user's key as
-   * soon as it is read, so a later failure can still be logged with the key blanked out.
-   */
+  /** Runs every check that comes before Claude is called, and claims a slot. */
   async admit(
     userId: string,
     headers: IncomingHttpHeaders,
     body: unknown,
-    onOwnKey: (key: string | null) => void,
+    ownKey: string | null,
   ): Promise<Admitted> {
-    const ownKey = readOwnKey(body);
-    onOwnKey(ownKey);
-    if (!ownKey && !this.env.anthropicApiKey)
+    if (!ownKey && !this.env.anthropicApiKey) {
       fail(HttpStatus.SERVICE_UNAVAILABLE, 'The server is not set up yet.');
-
+    }
     const checked = validateRequest(body);
     if (!checked.ok) fail(HttpStatus.BAD_REQUEST, checked.error);
     const req = checked.value;
 
+    // Checked before the slot is claimed, so a refused search does not use up a request.
+    if (req.options.webSearch && !ownKey)
+      await this.supabase.checkSearchBudget(userId);
     const network = ipHash(
       headers,
       this.env.trustedIpHeader,
@@ -64,8 +63,6 @@ export class ClaudeService {
       req,
       ownKey !== null,
     );
-    if (req.options.webSearch && !ownKey)
-      await this.supabase.checkSearchBudget(userId);
     return {
       req,
       ownKey,
@@ -74,7 +71,11 @@ export class ClaudeService {
     };
   }
 
-  // The document cap protects the shared budget; on the user's own key the API's own limits apply.
+  /**
+   * The document cap protects the shared budget; on the user's own key the API's own limits apply.
+   * Runs after the slot is claimed so token counting cannot be used for free; a refused document
+   * keeps its row with no tokens, which counts as a request and costs nothing.
+   */
   async checkDocumentSize(
     { req, ownKey, anthropic }: Admitted,
     signal: AbortSignal,
@@ -103,11 +104,13 @@ export class ClaudeService {
   }
 }
 
-// The user's own key from the body, or null when the request uses the project's key. A key that is
-// present but not shaped like an Anthropic key is refused rather than ignored, so a typo never
-// quietly spends the shared budget. validateRequest never copies api_key into the request it
-// builds, so the key cannot reach Claude or the logs by that path.
-function readOwnKey(body: unknown): string | null {
+/**
+ * The user's own key from the body, or null when the request uses the project's key. A key that is
+ * present but not shaped like an Anthropic key is refused rather than ignored, so a typo never
+ * quietly spends the shared budget. validateRequest never copies api_key into the request it
+ * builds, so the key cannot reach Claude or the logs by that path.
+ */
+export function readOwnKey(body: unknown): string | null {
   const value = (body as { api_key?: unknown } | null)?.api_key;
   if (value === undefined || value === null) return null;
   if (typeof value !== 'string' || !OWN_KEY_PATTERN.test(value)) {

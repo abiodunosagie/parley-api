@@ -50,7 +50,7 @@ You need Node.js 24 and the Supabase project from the [Parley repo](https://gith
 git clone https://github.com/abiodunosagie/parley-api.git && cd parley-api
 npm ci
 cp .env.example .env        # fill in your Supabase URL, service role key and Anthropic key
-set -a && . ./.env && set +a
+set -a && . ./.env && set +a   # Nest does not read .env itself; this exports it to the shell
 npm run start:dev           # http://localhost:3000/health
 ```
 
@@ -58,56 +58,70 @@ Then point the app at it: set `PARLEY_API_URL` in Parley's `config/parley.json`.
 
 ## Deploy (free)
 
-It runs on Vercel's Hobby plan with no changes: NestJS is detected from `vercel.json`, the app
-becomes one function, and streams can run for up to 5 minutes.
+It runs on Vercel's Hobby plan with no changes: `vercel.json` pins the NestJS preset, the app
+becomes one function, and a stream can stay open for the function's default limit of 300 seconds
+(a 95-second stream was checked live).
 
 ```bash
 vercel link
 vercel env add SUPABASE_URL production
 vercel env add SUPABASE_SERVICE_ROLE_KEY production --sensitive
 vercel env add ANTHROPIC_API_KEY production --sensitive
-vercel env add MAX_BODY_BYTES production        # 4400000: Vercel refuses bodies over 4.5 MB
 vercel deploy --prod
 ```
 
-Vercel caps a request body at 4.5 MB, so PDFs over about 3 MB and several large photos in one
-message are refused there. On a host without that cap (Render, a container, a VM) leave
-`MAX_BODY_BYTES` unset and the full 16 MB limit applies.
+Vercel caps a request body at 4.5 MB, so on Vercel the API accepts up to 4.4 MB by itself (PDFs
+over about 3 MB and several large photos in one message are refused). On a host without that cap
+(Render, a container, a VM) the full 16 MB limit applies.
+
+**Off Vercel, set `TRUSTED_IP_HEADER`** to a header that your host's proxy overwrites with the
+caller's IP. The default, `x-vercel-forwarded-for`, is only trustworthy on Vercel; anywhere else a
+caller could set it and dodge the per-network daily limit. The per-user limits apply regardless.
+Every request with a token costs one Supabase auth lookup, so put the host's firewall rate
+limiting in front if the API is ever flooded with bad tokens.
 
 | Variable | Required | What it is |
 | --- | --- | --- |
 | `SUPABASE_URL` | yes | `https://<ref>.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | yes | server-only key for auth checks and the limits table |
 | `ANTHROPIC_API_KEY` | no | the project's key; without it only own-key requests are served |
-| `MAX_BODY_BYTES` | no | largest body accepted, default 16000000 |
+| `MAX_BODY_BYTES` | no | largest body accepted: 16000000, or 4400000 on Vercel |
+| `PORT` | no | port to listen on off Vercel, default 3000 |
 | `TRUSTED_IP_HEADER` | no | header the host sets with the caller's IP, default `x-vercel-forwarded-for` |
 
 ## Tests
 
 ```bash
 npm run lint && npx tsc --noEmit
-npm test            # 30 unit tests: request, replay and own-key validation
-npm run test:e2e    # 14 end-to-end tests through the real Nest app: auth, size, limits, SSE, aborts
+npm test            # 35 unit tests: request, replay and own-key validation, environment
+npm run test:e2e    # 17 end-to-end tests through the real Nest app: auth, size, limits, SSE, aborts
 ```
 
 ## Layout
 
 ```
 src/
-  main.ts                    boot, CORS, body parser off
-  app.module.ts              env, error filter, modules
-  config/env.ts              environment, checked once at boot
-  common/error.filter.ts     every error as { error }
+  main.ts                    boot, CORS, body parser off, shutdown hooks
+  app.module.ts              wires the modules and the error filter
+  config/env.ts              environment, checked once at boot (env.module.ts shares it)
+  common/error.filter.ts     every error as { error }, only app-safe words
   health/                    GET /health
   claude/
-    claude.controller.ts     POST /v1/claude, SSE or JSON
-    claude.service.ts        own key, validation, limits, document cap
-    request-guards.ts        size and sign-in checks
+    claude.module.ts         the Claude feature
+    claude.controller.ts     POST /v1/claude: SSE or JSON, abort handling, 405 for other methods
+    claude.service.ts        own key, validation, search budget, limits, document cap
+    request-guards.ts        size and sign-in checks, before the body is read
+    request-body.ts          streamed body reader with a byte limit
     supabase.service.ts      auth lookup, claim_claude_request, usage log
+    ip-hash.ts               hashed network id from the host's trusted header
+    token-estimate.ts        cautious token count when the API reported none
+    http-error.ts            PublicError: the only errors whose words reach the app
     anthropic.ts             the only file that calls the Anthropic API
     validate*.ts             the allowlist every request passes
     config.ts                models, modes, limits
     prompts.ts, schemas.ts   system prompts, structured-output schemas, agent tools
+test/claude.e2e-spec.ts      the end-to-end suite (Supabase and Anthropic faked)
+brand/                       banners and social preview, in Parley's brand
 ```
 
 ## License

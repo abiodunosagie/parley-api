@@ -19,6 +19,8 @@ import { ALLOWED_BLOCKS, type ClaudeRequest } from './validate.js';
 // stored or logged.
 let projectClient: Anthropic | null = null;
 
+export type AnthropicClient = Anthropic;
+
 export function clientFor(
   ownKey: string | null,
   projectKey: string | undefined,

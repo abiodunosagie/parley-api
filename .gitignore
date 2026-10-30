@@ -16,3 +16,7 @@ SESSION_GUIDE.md
 .DS_Store
 docs/.task-tracker.tsv.lock
 brand/__pycache__/
+
+# Supabase CLI working files and local direnv setup
+supabase/
+.envrc

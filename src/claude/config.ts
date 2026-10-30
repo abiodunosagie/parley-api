@@ -28,6 +28,9 @@ export const STREAMING_MODES = [
 ] as const;
 export type Mode = (typeof MODES)[number];
 
+export const isStreamingMode = (mode: Mode): boolean =>
+  (STREAMING_MODES as readonly Mode[]).includes(mode);
+
 // Output ceilings per mode. Thinking tokens count toward these, so they are generous for the task
 // but still cap what one request can cost.
 export const MAX_TOKENS: Record<Mode, number> = {

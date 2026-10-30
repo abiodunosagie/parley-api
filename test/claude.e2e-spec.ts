@@ -23,13 +23,13 @@ const db = {
   searchRows: [] as { web_searches: number }[],
 };
 
-// A query builder that records nothing and resolves to the search rows: enough for
-// select().eq().eq().gt().gt().
+// The select chain the search budget uses (select().eq().eq().gt().gt()): a real Promise of the
+// search rows, with the builder methods returning itself.
 function selectChain() {
-  const chain: Record<string, unknown> = {};
-  for (const name of ['select', 'eq', 'gt']) chain[name] = () => chain;
-  chain.then = (resolve: (v: unknown) => void) =>
-    resolve({ data: db.searchRows, error: null });
+  type Chain = Promise<{ data: unknown; error: null }> &
+    Record<'select' | 'eq' | 'gt', () => Chain>;
+  const chain = Promise.resolve({ data: db.searchRows, error: null }) as Chain;
+  chain.select = chain.eq = chain.gt = () => chain;
   return chain;
 }
 
@@ -46,7 +46,7 @@ vi.mock('@supabase/supabase-js', () => ({
       return { data: [db.claim], error: null };
     },
     from: () => ({
-      ...selectChain(),
+      select: () => selectChain(),
       update: (values: Record<string, unknown>) => ({
         eq: async (_column: string, id: unknown) => {
           db.updates.push({ values, id });
@@ -114,13 +114,23 @@ const fakeClient = {
     messages: {
       stream: (_params: unknown, options: { signal: AbortSignal }) =>
         fakeStream(options.signal),
-      create: async () => ({
-        usage: { input_tokens: 20, output_tokens: 8 },
-        stop_reason: 'end_turn',
-        content: [
-          { type: 'text', text: JSON.stringify(claude.structuredFields) },
-        ],
-      }),
+      create: async () => {
+        if (claude.script === 'rate-limit') {
+          throw new Anthropic.RateLimitError(
+            429,
+            {},
+            'rate limited',
+            new Headers(),
+          );
+        }
+        return {
+          usage: { input_tokens: 20, output_tokens: 8 },
+          stop_reason: 'end_turn',
+          content: [
+            { type: 'text', text: JSON.stringify(claude.structuredFields) },
+          ],
+        };
+      },
       countTokens: async () => ({ input_tokens: 100 }),
     },
   },
@@ -264,6 +274,8 @@ describe('POST /v1/claude', () => {
       .send({ ...chatBody, options: { web_search: true } })
       .expect(429);
     expect(res.body.error).toMatch(/web search limit/);
+    // Refused before a slot is claimed, so it does not use up a request.
+    expect(db.rpcCalls).toHaveLength(0);
   });
 
   it('hashes the network from the trusted header only, matching the edge function', async () => {
@@ -336,6 +348,33 @@ describe('POST /v1/claude', () => {
     expect(res.text).toContain(
       'Claude is busy right now. Try again in a moment.',
     );
+    expect(db.updates).toHaveLength(1);
+  });
+
+  it('answers other methods with 405, like the edge function', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/v1/claude')
+      .expect(405);
+    expect(res.body).toEqual({ error: 'Use POST.' });
+  });
+
+  it('answers unknown routes with a plain 404', async () => {
+    const res = await request(app.getHttpServer()).get('/nope').expect(404);
+    expect(res.body).toEqual({ error: 'Not found.' });
+  });
+
+  it('maps a Claude error on a JSON mode to safe words and still logs usage first', async () => {
+    claude.script = 'rate-limit';
+    const res = await signedIn()
+      .send({
+        mode: 'extract',
+        model: 'claude-opus-5-5',
+        messages: [{ role: 'user', content: 'A job post' }],
+      })
+      .expect(503);
+    expect(res.body).toEqual({
+      error: 'Claude is busy right now. Try again in a moment.',
+    });
     expect(db.updates).toHaveLength(1);
   });
 

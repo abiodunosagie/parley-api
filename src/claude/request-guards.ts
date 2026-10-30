@@ -21,6 +21,8 @@ export class BodySizeGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
+    // An early refusal only: a missing or malformed Content-Length reads as 0 or NaN and passes
+    // here, and the byte counter in request-body.ts still holds the real limit.
     const size = Number(request.headers['content-length'] ?? '0');
     if (size > this.env.maxBodyBytes) {
       // Let the upload drain into nothing, so the app reads the 413 instead of a reset socket.

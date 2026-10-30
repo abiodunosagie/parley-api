@@ -1,11 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
+import { ENV, type Env } from './config/env.js';
 
 async function bootstrap() {
   // The body parser is off: the Claude route reads its own body, after the size and sign-in checks.
   const app = await NestFactory.create(AppModule, { bodyParser: false });
-  // The mobile app needs no CORS. It stays so a web build of the same app can call the API; auth is
-  // a Bearer header, never a cookie, so * is safe.
+  // Any origin may call the API: the only credential is the Bearer token in the Authorization
+  // header, never a cookie, so a page on another site has nothing to borrow. The mobile app does
+  // not need CORS at all; a web build of the same app does.
   app.enableCors({
     origin: '*',
     methods: ['GET', 'POST', 'OPTIONS'],
@@ -16,7 +18,9 @@ async function bootstrap() {
       'x-client-info',
     ],
   });
-  await app.listen(process.env.PORT ?? 3000);
+  // On a long-running host, let open streams finish their usage logging before the process exits.
+  app.enableShutdownHooks();
+  await app.listen(app.get<Env>(ENV).port);
 }
 
 // Not awaited at the top level: on Vercel the launcher takes over listen() and never resolves it,
