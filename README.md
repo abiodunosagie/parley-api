@@ -97,6 +97,10 @@ npm test            # 35 unit tests: request, replay and own-key validation, env
 npm run test:e2e    # 17 end-to-end tests through the real Nest app: auth, size, limits, SSE, aborts
 ```
 
+Against a deployed copy, `scripts/live-check.mjs` signs up a throwaway `parley-test-*` user, calls
+every mode, prints what each returned and what the limits table logged, then deletes the user
+(the comment at the top lists the variables it needs). It spends a few cents of Claude credit.
+
 ## Layout
 
 ```
@@ -121,6 +125,7 @@ src/
     config.ts                models, modes, limits
     prompts.ts, schemas.ts   system prompts, structured-output schemas, agent tools
 test/claude.e2e-spec.ts      the end-to-end suite (Supabase and Anthropic faked)
+scripts/live-check.mjs       every mode against a deployed copy, with a throwaway user
 brand/                       banners and social preview, in Parley's brand
 ```
 
